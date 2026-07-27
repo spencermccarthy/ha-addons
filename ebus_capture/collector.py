@@ -159,3 +159,41 @@ def make_handler(db_path):
 
 def serve(db_path, port):
     HTTPServer(("0.0.0.0", port), make_handler(db_path)).serve_forever()
+
+
+import threading
+
+
+def _c6_get_log(host):
+    with urllib.request.urlopen(f"http://{host}/api/v1/log", timeout=10) as r:
+        return json.loads(r.read().decode()).get("entries", [])
+
+
+def poll_once(conn, cfg, get_log, get_state, now):
+    n = ingest_log(conn, get_log(), now)
+    ctx = fetch_ha_context(cfg["ha_entities"], get_state)
+    insert_context(conn, now, ctx)
+    return n, ctx
+
+
+def main():
+    cfg = load_config()
+    conn = init_db(cfg["db_path"])
+    threading.Thread(target=serve, args=(cfg["db_path"], cfg["api_port"]),
+                     daemon=True).start()
+    print(f"ebus_capture: polling {cfg['ebus_host']} every {cfg['poll_secs']}s; "
+          f"API on :{cfg['api_port']}", flush=True)
+    while True:
+        try:
+            n, _ = poll_once(conn, cfg,
+                             lambda: _c6_get_log(cfg["ebus_host"]),
+                             _supervisor_get_state, int(time.time()))
+            if n:
+                print(f"ebus_capture: +{n} telegram row(s)", flush=True)
+        except Exception as e:
+            print(f"ebus_capture: poll error: {e}", flush=True)
+        time.sleep(cfg["poll_secs"])
+
+
+if __name__ == "__main__":
+    main()
