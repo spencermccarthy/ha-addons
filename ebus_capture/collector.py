@@ -11,7 +11,7 @@ def load_config():
     return {
         "ebus_host": os.environ.get("EBUS_HOST", "172.16.12.216"),
         "poll_secs": int(os.environ.get("POLL_SECS", "60")),
-        "api_port": int(os.environ.get("API_PORT", "8199")),
+        "api_port": int(os.environ.get("API_PORT", "9099")),
         "ha_entities": [tuple(e.split(":", 1)) for e in ents],
         "db_path": os.environ.get("EBUS_DB", "/data/telegrams.sqlite"),
     }

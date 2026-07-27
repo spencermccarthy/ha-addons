@@ -1,5 +1,5 @@
 name: eBUS Capture
-version: "0.1.1"
+version: "0.1.2"
 slug: ebus_capture
 description: Durably capture undecoded eBUS telegrams from the C6 + a compact HA sensor context for correlation.
 arch:
@@ -10,13 +10,13 @@ startup: application
 boot: manual
 homeassistant_api: true
 ports:
-  "8199/tcp": 8199
+  "9099/tcp": 9099
 ports_description:
-  "8199/tcp": Read-only JSON API for the ebus skill
+  "9099/tcp": Read-only JSON API for the ebus skill
 options:
   ebus_host: 172.16.12.216
   poll_secs: 60
-  api_port: 8199
+  api_port: 9099
   ha_entities:
     - "outsidetemp:sensor.micro_ebusd_broadcast_outsidetemp"
     - "flowtemp:sensor.micro_ebusd_hmu_flowtemp"

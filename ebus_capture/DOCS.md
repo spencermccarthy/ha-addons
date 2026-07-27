@@ -23,14 +23,14 @@ Every `poll_secs` (default 60) it:
 |---|---|---|
 | `ebus_host` | `172.16.12.216` | C6 adapter IP/host |
 | `poll_secs` | `60` | poll interval |
-| `api_port` | `8199` | read API port (host-mapped) |
+| `api_port` | `9099` | read API port (host-mapped) |
 | `ha_entities` | see below | `col:entity_id` list captured each poll |
 
 Default `ha_entities` map to columns `outsidetemp, flowtemp, returntemp,
 roomtemp, compressor_rps, power_kw, statuscode`. Numeric columns are stored as
 floats; `statuscode` as text.
 
-## Read API (`:8199`, JSON, LAN-only)
+## Read API (`:9099`, JSON, LAN-only)
 
 | Endpoint | Returns |
 |---|---|
@@ -40,4 +40,4 @@ floats; `statuscode` as text.
 | `GET /context?from=&to=` | HA context rows in a time range |
 
 Consumed by the `ebus` skill: `ebus keys`, `ebus history <key>`,
-`ebus correlate <key>` (set `EBUS_CAPTURE_URL` to `http://<ha-host>:8199`).
+`ebus correlate <key>` (set `EBUS_CAPTURE_URL` to `http://<ha-host>:9099`).
