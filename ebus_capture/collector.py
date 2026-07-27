@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """ebus_capture — poll the C6 /log + HA context into SQLite, expose a read API."""
-import json, os, re, sqlite3, time, urllib.request, urllib.error
+import json, os, re, sqlite3, time, urllib.request, urllib.error, urllib.parse
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 _UNKNOWN_RE = re.compile(r"received unknown ([0-9a-fA-F]+)\s*/\s*([0-9a-fA-F]*)")
 
@@ -101,3 +102,60 @@ def _supervisor_get_state(entity_id):
     req = urllib.request.Request(base + entity_id, headers={"Authorization": "Bearer " + token})
     with urllib.request.urlopen(req, timeout=10) as r:
         return json.loads(r.read().decode()).get("state")
+
+
+def _rows(conn, sql, args=()):
+    cur = conn.execute(sql, args)
+    cols = [d[0] for d in cur.description]
+    return [dict(zip(cols, r)) for r in cur.fetchall()]
+
+
+def api_response(conn, path):
+    parts = urllib.parse.urlsplit(path)
+    p = parts.path
+    q = urllib.parse.parse_qs(parts.query)
+    if p == "/health":
+        tr = conn.execute("SELECT COUNT(*) FROM telegram").fetchone()[0]
+        cr = conn.execute("SELECT COUNT(*) FROM ha_context").fetchone()[0]
+        since = conn.execute("SELECT MIN(wall_ts) FROM telegram").fetchone()[0]
+        return 200, {"ok": True, "telegram_rows": tr, "context_rows": cr, "since_ts": since}
+    if p == "/keys":
+        return 200, _rows(conn,
+            "SELECT key, COUNT(*) count, MIN(wall_ts) first_ts, MAX(wall_ts) last_ts"
+            " FROM telegram GROUP BY key ORDER BY count DESC")
+    if p.startswith("/history/"):
+        key = urllib.parse.unquote(p[len("/history/"):])
+        limit = int(q.get("limit", ["500"])[0])
+        return 200, _rows(conn,
+            "SELECT wall_ts, device_time, payload FROM telegram"
+            " WHERE key=? ORDER BY wall_ts DESC LIMIT ?", (key, limit))
+    if p == "/context":
+        frm = int(q.get("from", ["0"])[0])
+        to = int(q.get("to", ["9999999999"])[0])
+        return 200, _rows(conn,
+            "SELECT * FROM ha_context WHERE wall_ts BETWEEN ? AND ? ORDER BY wall_ts", (frm, to))
+    return 404, {"error": "not found"}
+
+
+def make_handler(db_path):
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            conn = sqlite3.connect(db_path)
+            try:
+                status, body = api_response(conn, self.path)
+            finally:
+                conn.close()
+            payload = json.dumps(body).encode()
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+        def log_message(self, *a):
+            pass
+    return Handler
+
+
+def serve(db_path, port):
+    HTTPServer(("0.0.0.0", port), make_handler(db_path)).serve_forever()
