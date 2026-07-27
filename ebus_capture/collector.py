@@ -62,3 +62,42 @@ def ingest_log(conn, entries, now_ts):
         n += cur.rowcount
     conn.commit()
     return n
+
+
+_CONTEXT_COLS = {"outsidetemp", "flowtemp", "returntemp", "roomtemp",
+                 "compressor_rps", "power_kw", "statuscode"}
+
+
+def fetch_ha_context(entities, get_state):
+    ctx = {}
+    for col, entity in entities:
+        if col not in _CONTEXT_COLS:
+            continue
+        try:
+            raw = get_state(entity)
+        except Exception:
+            raw = None
+        if col == "statuscode":
+            ctx[col] = raw
+        else:
+            try:
+                ctx[col] = float(raw)
+            except (TypeError, ValueError):
+                ctx[col] = None
+    return ctx
+
+
+def insert_context(conn, now_ts, ctx):
+    cols = ["wall_ts"] + list(ctx.keys())
+    vals = [now_ts] + list(ctx.values())
+    ph = ",".join("?" * len(cols))
+    conn.execute(f"INSERT OR REPLACE INTO ha_context ({','.join(cols)}) VALUES ({ph})", vals)
+    conn.commit()
+
+
+def _supervisor_get_state(entity_id):
+    base = "http://supervisor/core/api/states/"
+    token = os.environ.get("SUPERVISOR_TOKEN", "")
+    req = urllib.request.Request(base + entity_id, headers={"Authorization": "Bearer " + token})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        return json.loads(r.read().decode()).get("state")
